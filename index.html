@@ -71,7 +71,6 @@
   .balance.neg{color:var(--red)}
   .note{font-size:.8rem;color:var(--ink-dim);margin-top:6px}
 
-  /* Estilos para Pantalla de Selección de Día */
   .day-selection-screen{
     background:var(--card);
     border:1px solid var(--line);
@@ -159,7 +158,6 @@
     </div>
   </header>
 
-  <!-- PRIMERA INTERFAZ: SELECCIÓN DE DÍA -->
   <div id="daySelectionScreen" class="day-selection-screen">
     <div style="font-size:3rem;margin-bottom:8px">🍗</div>
     <h2>¿Qué día de Pollada deseas gestionar?</h2>
@@ -185,7 +183,6 @@
     </div>
   </div>
 
-  <!-- CONTENIDO PRINCIPAL DE LA APP -->
   <div id="mainAppContent" style="display:none;">
     <section>
       <h2>Configuración</h2>
@@ -211,6 +208,21 @@
         </div>
       </div>
     </section>
+
+    <section>
+    <h2>Pasar datos entre dispositivos</h2>
+    <div class="card" style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between">
+      <div>
+        <div style="font-size:.88rem">Los datos se guardan solo en este navegador/dispositivo. Para verlos en otro celular o computadora, exporta un archivo aquí e impórtalo allá (mándatelo por WhatsApp o correo).</div>
+        <div class="note" id="syncMsg"></div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <input type="file" id="syncFile" accept=".json" style="display:none">
+        <button type="button" class="ghost" id="exportBtn">Exportar datos</button>
+        <button type="button" class="ghost" id="syncImportBtn">Importar datos</button>
+      </div>
+    </div>
+  </section>
 
     <section>
       <h2>Nuevo pedido</h2>
@@ -277,7 +289,7 @@
 
 <script>
 const DEFAULT_CFG = { precio: 15, piezas: 4, fuente: 8, costoPollo: 22, gastos: 0 };
-let currentDay = null; // 'v25' or 'd27'
+let currentDay = null;
 let orders = [];
 let cfg = {...DEFAULT_CFG};
 let editingId = null;
@@ -633,7 +645,7 @@ function importWorkbook(arrayBuffer){
     const pierna = kPierna ? (Number(row[kPierna])||0) : 0;
     const montoRaw = kMonto ? Number(row[kMonto]) : NaN;
     const monto = isNaN(montoRaw) ? (pecho+pierna)*cfg.precio : montoRaw;
-    
+
     let cancelado = true;
     if(kCancelado){
       const val = String(row[kCancelado]||'').trim().toLowerCase();
@@ -681,6 +693,42 @@ document.getElementById('importFile').addEventListener('change', function(e){
     e.target.value='';
   };
   reader.readAsArrayBuffer(file);
+});
+
+document.getElementById('exportBtn').addEventListener('click', function(){
+  const payload = JSON.stringify({day: currentDay, orders, cfg}, null, 2);
+  const blob = new Blob([payload], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'pollada-' + (currentDay||'datos') + '-' + new Date().toISOString().slice(0,16).replace(/[:T]/g,'-') + '.json';
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+  document.getElementById('syncMsg').textContent = 'Archivo descargado. Envíatelo (WhatsApp/correo) y ábrelo en el otro dispositivo con "Importar datos".';
+});
+
+document.getElementById('syncImportBtn').addEventListener('click', ()=>document.getElementById('syncFile').click());
+document.getElementById('syncFile').addEventListener('change', function(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  const proceed = confirm('Esto reemplazará TODOS los pedidos y la configuración de ' + (DAY_NAMES[currentDay]||'este día') + ' en este dispositivo por los del archivo. ¿Continuar?');
+  if(!proceed){ e.target.value=''; return; }
+  const reader = new FileReader();
+  reader.onload = function(ev){
+    try{
+      const data = JSON.parse(ev.target.result);
+      if(!Array.isArray(data.orders)) throw new Error('formato inválido');
+      orders = data.orders;
+      cfg = {...DEFAULT_CFG, ...(data.cfg||{})};
+      save(); fillCfgInputs(); render(); updateDayStats();
+      document.getElementById('syncMsg').textContent = `Se cargaron ${orders.length} pedido(s) desde el archivo a ${DAY_NAMES[currentDay]}.`;
+    }catch(err){
+      document.getElementById('syncMsg').textContent = 'No se pudo leer el archivo. Asegúrate de que sea un archivo exportado desde este mismo panel.';
+      console.error(err);
+    }
+    e.target.value='';
+  };
+  reader.readAsText(file);
 });
 
 document.getElementById('searchNombre').addEventListener('input', render);
