@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pollada Domingo 27 — Panel de pedidos</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --bg:#1C1410; --card:#241B15; --card2:#2C2118; --line:#3A2C20;
+    --ink:#F2E9DD; --ink-dim:#C7B49B; --gold:#E3A039; --gold-ink:#1C1410;
+    --green:#7A9A5C; --red:#C1573B; --radius:10px;
+    box-sizing:border-box;
+    padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+  }
+  @media (prefers-color-scheme: light){
+    :root:not([data-theme="dark"]){
+      --bg:#FBF6EE; --card:#FFFFFF; --card2:#F3EAD9; --line:#E3D6BF;
+      --ink:#2A1E14; --ink-dim:#6B5A44; --gold:#B9791E; --gold-ink:#FFFFFF;
+      --green:#4B6B34; --red:#A03F27;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#1C1410; --card:#241B15; --card2:#2C2118; --line:#3A2C20;
+    --ink:#F2E9DD; --ink-dim:#C7B49B; --gold:#E3A039; --gold-ink:#1C1410;
+    --green:#7A9A5C; --red:#C1573B;
+  }
+  *{box-sizing:border-box}
+  html{scroll-padding-top:env(safe-area-inset-top,0px)}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,Segoe UI,sans-serif;line-height:1.4}
+  h1,h2,h3{font-family:Georgia,'Times New Roman',serif;margin:0}
+  .wrap{max-width:960px;margin:0 auto;padding:20px 16px 60px}
+  header{padding:8px 0 20px;border-bottom:1px solid var(--line);margin-bottom:20px}
+  header h1{font-size:1.5rem;color:var(--gold)}
+  header p{margin:4px 0 0;color:var(--ink-dim);font-size:.92rem}
+  .grid{display:grid;gap:12px}
+  .cards{grid-template-columns:repeat(auto-fit,minmax(140px,1fr))}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px}
+  .card .num{font-size:1.7rem;font-weight:700;color:var(--gold)}
+  .card .label{font-size:.8rem;color:var(--ink-dim)}
+  section{margin-bottom:28px}
+  section > h2{font-size:1.05rem;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--line)}
+  .settings{grid-template-columns:repeat(auto-fit,minmax(160px,1fr))}
+  label{display:block;font-size:.78rem;color:var(--ink-dim);margin-bottom:3px}
+  input,select{width:100%;background:var(--card2);border:1px solid var(--line);color:var(--ink);border-radius:6px;padding:8px;font-size:.9rem}
+  input:focus,select:focus{outline:2px solid var(--gold)}
+  .field{margin-bottom:8px}
+  form.order-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px}
+  .form-actions{grid-column:1/-1;display:flex;gap:10px;margin-top:4px}
+  button{cursor:pointer;border:none;border-radius:6px;padding:9px 16px;font-size:.9rem;font-weight:600}
+  button.primary{background:var(--gold);color:var(--gold-ink)}
+  button.ghost{background:transparent;border:1px solid var(--line);color:var(--ink)}
+  button.small{padding:5px 10px;font-size:.78rem}
+  .table-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--radius)}
+  table{width:100%;border-collapse:collapse;min-width:800px;background:var(--card)}
+  th,td{padding:9px 10px;text-align:left;font-size:.85rem;border-bottom:1px solid var(--line)}
+  th{color:var(--ink-dim);font-weight:600;font-size:.75rem}
+  tr:last-child td{border-bottom:none}
+  .pill{display:inline-block;padding:2px 8px;border-radius:20px;font-size:.72rem;background:var(--card2);color:var(--ink-dim)}
+  .pill-paid{background:rgba(122,154,92,0.2);color:var(--green);border:1px solid var(--green);cursor:pointer;font-weight:600}
+  .pill-pending{background:rgba(193,87,59,0.2);color:var(--red);border:1px solid var(--red);cursor:pointer;font-weight:600}
+  .inline-select{background:var(--card2);border:1px solid var(--line);color:var(--ink);border-radius:6px;padding:4px 6px;font-size:.78rem;cursor:pointer}
+  .inline-select:focus{outline:1px solid var(--gold)}
+  .districts{display:grid;gap:10px}
+  .dist-card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px}
+  .dist-card h3{font-size:.95rem;color:var(--gold);margin-bottom:6px}
+  .dist-card ul{margin:0;padding-left:18px;font-size:.85rem;color:var(--ink-dim)}
+  .empty{color:var(--ink-dim);font-size:.88rem;padding:20px;text-align:center}
+  .balance{font-size:1.4rem;font-weight:700}
+  .balance.pos{color:var(--green)}
+  .balance.neg{color:var(--red)}
+  .note{font-size:.8rem;color:var(--ink-dim);margin-top:6px}
+
+  /* Estilos para Pantalla de Selección de Día */
+  .day-selection-screen{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:36px 24px;
+    text-align:center;
+    margin:20px 0 40px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+  }
+  .day-selection-screen h2{
+    font-size:1.6rem;
+    color:var(--gold);
+    margin-bottom:8px;
+  }
+  .day-cards-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+    gap:20px;
+    max-width:560px;
+    margin:24px auto 0;
+  }
+  .day-card{
+    background:var(--card2);
+    border:2px solid var(--line);
+    border-radius:var(--radius);
+    padding:24px 20px;
+    cursor:pointer;
+    transition:all 0.25s ease;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+  }
+  .day-card:hover{
+    border-color:var(--gold);
+    transform:translateY(-4px);
+    box-shadow: 0 8px 20px rgba(227, 160, 57, 0.15);
+  }
+  .day-card-badge{
+    text-transform:uppercase;
+    font-size:0.78rem;
+    letter-spacing:1px;
+    color:var(--gold);
+    font-weight:700;
+  }
+  .day-card-date{
+    font-size:3rem;
+    font-weight:800;
+    line-height:1.1;
+    margin:4px 0;
+    color:var(--ink);
+  }
+  .day-card-month{
+    font-size:0.88rem;
+    color:var(--ink-dim);
+    margin-bottom:12px;
+  }
+  .day-card-stats{
+    font-size:0.82rem;
+    color:var(--green);
+    background:rgba(122,154,92,0.15);
+    border:1px solid rgba(122,154,92,0.3);
+    padding:4px 12px;
+    border-radius:12px;
+    margin-bottom:16px;
+    font-weight:600;
+  }
+  .day-switcher button.active-day{
+    background:var(--gold) !important;
+    color:var(--gold-ink) !important;
+    border-color:var(--gold) !important;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px">
+    <div>
+      <h1 id="headerTitle">Pollada — Seleccionar día</h1>
+      <p id="headerSub">Entrega objetivo: 12:00 m. en cada domicilio · pollo empaquetado y listo desde las 10:30 a.m.</p>
+    </div>
+    <div class="day-switcher" id="daySwitcher" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <button type="button" id="btnTabV25" class="ghost small" onclick="selectDay('v25')">📅 Viernes 25</button>
+      <button type="button" id="btnTabD27" class="ghost small" onclick="selectDay('d27')">📅 Domingo 27</button>
+      <button type="button" class="ghost small" onclick="showDaySelectionScreen()" title="Volver a la selección inicial">🏠 Selección</button>
+    </div>
+  </header>
+
+  <!-- PRIMERA INTERFAZ: SELECCIÓN DE DÍA -->
+  <div id="daySelectionScreen" class="day-selection-screen">
+    <div style="font-size:3rem;margin-bottom:8px">🍗</div>
+    <h2>¿Qué día de Pollada deseas gestionar?</h2>
+    <p style="color:var(--ink-dim);margin:0 auto 12px;max-width:500px;font-size:0.95rem">
+      Selecciona la fecha del evento para ver sus datos, cargar su archivo Excel de ventas o ingresar nuevos pedidos:
+    </p>
+    <div class="day-cards-grid">
+      <div class="day-card" onclick="selectDay('v25')">
+        <div class="day-card-badge">Viernes</div>
+        <div class="day-card-date">25</div>
+        <div class="day-card-month">Septiembre</div>
+        <div class="day-card-stats" id="stats-v25">0 pedidos</div>
+        <button class="primary" style="width:100%">Ingresar a Viernes 25</button>
+      </div>
+
+      <div class="day-card" onclick="selectDay('d27')">
+        <div class="day-card-badge">Domingo</div>
+        <div class="day-card-date">27</div>
+        <div class="day-card-month">Septiembre</div>
+        <div class="day-card-stats" id="stats-d27">0 pedidos</div>
+        <button class="primary" style="width:100%">Ingresar a Domingo 27</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONTENIDO PRINCIPAL DE LA APP -->
+  <div id="mainAppContent" style="display:none;">
+    <section>
+      <h2>Configuración</h2>
+      <div class="grid settings">
+        <div class="field"><label>Precio por porción (S/)</label><input id="cfgPrecio" type="number" min="0" step="0.5"></div>
+        <div class="field"><label>Piezas (pecho+pierna) por pollo</label><input id="cfgPiezas" type="number" min="1" step="1"></div>
+        <div class="field"><label>Porciones por fuente</label><input id="cfgFuente" type="number" min="1" step="1"></div>
+        <div class="field"><label>Costo por pollo (S/)</label><input id="cfgCostoPollo" type="number" min="0" step="0.5"></div>
+        <div class="field"><label>Otros gastos (S/)</label><input id="cfgGastos" type="number" min="0" step="0.5"></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Importar desde Excel</h2>
+      <div class="card" style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between">
+        <div>
+          <div style="font-size:.88rem">Sube tu Excel (.xlsx/.xls) con columnas de nombre, distrito, pecho, pierna y monto (los nombres de columna pueden variar un poco).</div>
+          <div class="note" id="importMsg"></div>
+        </div>
+        <div>
+          <input type="file" id="importFile" accept=".xlsx,.xls" style="display:none">
+          <button type="button" class="primary" id="importBtn">Importar Excel</button>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Nuevo pedido</h2>
+      <form class="order-form" id="orderForm">
+        <div class="field"><label>Nombre</label><input id="fNombre" required></div>
+        <div class="field"><label>Distrito</label><input id="fDistrito" required></div>
+        <div class="field"><label>Pechos</label><input id="fPecho" type="number" min="0" step="1" value="0"></div>
+        <div class="field"><label>Piernas</label><input id="fPierna" type="number" min="0" step="1" value="0"></div>
+        <div class="field"><label>Monto (S/)</label><input id="fMonto" type="number" min="0" step="0.5"></div>
+        <div class="field">
+          <label>¿Canceló / Pagó?</label>
+          <select id="fCancelado">
+            <option value="true">Sí (Cancelado)</option>
+            <option value="false">No (Pendiente)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Método de pago</label>
+          <select id="fMetodo">
+            <option value="Yape">Yape</option>
+            <option value="Plin">Plin</option>
+            <option value="Efectivo">Efectivo</option>
+            <option value="Transferencia">Transferencia</option>
+            <option value="Otro">Otro</option>
+          </select>
+        </div>
+        <div class="form-actions">
+          <button type="submit" class="primary" id="submitBtn">Agregar pedido</button>
+          <button type="button" class="ghost" id="cancelEdit" style="display:none">Cancelar edición</button>
+        </div>
+      </form>
+    </section>
+
+    <section>
+      <h2>Resumen</h2>
+      <div class="grid cards" id="summary"></div>
+    </section>
+
+    <section>
+      <h2>Cuadre de caja</h2>
+      <div class="grid cards" id="caja"></div>
+    </section>
+
+    <section>
+      <h2>Pedidos</h2>
+      <div class="field" style="max-width:320px;margin-bottom:12px">
+        <label>Buscar por nombre</label>
+        <input id="searchNombre" type="text" placeholder="Escribe un nombre...">
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Nombre</th><th>Distrito</th><th>Pecho</th><th>Pierna</th><th>Porciones</th><th>Monto</th><th>¿Canceló?</th><th>Método</th><th></th></tr></thead>
+          <tbody id="ordersBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section>
+      <h2>Reparto por distrito</h2>
+      <div class="districts" id="districts"></div>
+    </section>
+  </div>
+</div>
+
+<script>
+const DEFAULT_CFG = { precio: 15, piezas: 4, fuente: 8, costoPollo: 22, gastos: 0 };
+let currentDay = null; // 'v25' or 'd27'
+let orders = [];
+let cfg = {...DEFAULT_CFG};
+let editingId = null;
+
+const DAY_NAMES = {
+  v25: 'Viernes 25',
+  d27: 'Domingo 27'
+};
+
+function initDataMigration(){
+  try {
+    const oldOrders = localStorage.getItem('pollada_orders');
+    const oldCfg = localStorage.getItem('pollada_cfg');
+    if (oldOrders && !localStorage.getItem('pollada_orders_d27')) {
+      localStorage.setItem('pollada_orders_d27', oldOrders);
+    }
+    if (oldCfg && !localStorage.getItem('pollada_cfg_d27')) {
+      localStorage.setItem('pollada_cfg_d27', oldCfg);
+    }
+  } catch(e) { console.warn('migration error', e); }
+}
+
+function updateDayStats(){
+  try {
+    const oV25 = JSON.parse(localStorage.getItem('pollada_orders_v25') || '[]');
+    const oD27 = JSON.parse(localStorage.getItem('pollada_orders_d27') || '[]');
+    document.getElementById('stats-v25').textContent = `${oV25.length} pedido(s) registrado(s)`;
+    document.getElementById('stats-d27').textContent = `${oD27.length} pedido(s) registrado(s)`;
+  } catch(e) {}
+}
+
+window.showDaySelectionScreen = function(){
+  currentDay = null;
+  localStorage.removeItem('pollada_active_day');
+  document.getElementById('daySelectionScreen').style.display = 'block';
+  document.getElementById('mainAppContent').style.display = 'none';
+  document.getElementById('headerTitle').textContent = 'Pollada — Seleccionar día';
+  document.getElementById('btnTabV25').classList.remove('active-day');
+  document.getElementById('btnTabD27').classList.remove('active-day');
+  updateDayStats();
+};
+
+window.selectDay = function(dayKey){
+  if(!['v25', 'd27'].includes(dayKey)) return;
+  currentDay = dayKey;
+  localStorage.setItem('pollada_active_day', dayKey);
+
+  document.getElementById('daySelectionScreen').style.display = 'none';
+  document.getElementById('mainAppContent').style.display = 'block';
+
+  document.getElementById('btnTabV25').classList.toggle('active-day', dayKey === 'v25');
+  document.getElementById('btnTabD27').classList.toggle('active-day', dayKey === 'd27');
+
+  document.getElementById('headerTitle').textContent = `Pollada — ${DAY_NAMES[dayKey]}`;
+
+  loadDayData(dayKey);
+  fillCfgInputs();
+  render();
+};
+
+function loadDayData(dayKey){
+  try {
+    const o = localStorage.getItem(`pollada_orders_${dayKey}`);
+    const c = localStorage.getItem(`pollada_cfg_${dayKey}`);
+    orders = o ? JSON.parse(o) : [];
+    cfg = c ? {...DEFAULT_CFG, ...JSON.parse(c)} : {...DEFAULT_CFG};
+  } catch(e) {
+    orders = [];
+    cfg = {...DEFAULT_CFG};
+  }
+}
+
+function load(){
+  initDataMigration();
+  updateDayStats();
+  const activeDay = localStorage.getItem('pollada_active_day');
+  if(activeDay && ['v25', 'd27'].includes(activeDay)){
+    selectDay(activeDay);
+  } else {
+    showDaySelectionScreen();
+  }
+}
+
+function save(){
+  if(!currentDay) return;
+  try{
+    localStorage.setItem(`pollada_orders_${currentDay}`, JSON.stringify(orders));
+    localStorage.setItem(`pollada_cfg_${currentDay}`, JSON.stringify(cfg));
+  }catch(e){ console.warn('storage write failed', e); }
+}
+
+function fillCfgInputs(){
+  document.getElementById('cfgPrecio').value = cfg.precio;
+  document.getElementById('cfgPiezas').value = cfg.piezas;
+  document.getElementById('cfgFuente').value = cfg.fuente;
+  document.getElementById('cfgCostoPollo').value = cfg.costoPollo;
+  document.getElementById('cfgGastos').value = cfg.gastos;
+}
+
+function render(){
+  const totalPedidos = orders.length;
+  const totalPecho = orders.reduce((s,o)=>s+o.pecho,0);
+  const totalPierna = orders.reduce((s,o)=>s+o.pierna,0);
+  const totalPiezas = totalPecho + totalPierna;
+  const pollos = Math.ceil(totalPiezas / (cfg.piezas||1)) || 0;
+  const fuentes = Math.ceil(totalPiezas / (cfg.fuente||1)) || 0;
+  const totalIngresos = orders.reduce((s,o)=>s+o.monto,0);
+  const totalCobrado = orders.filter(o=>o.cancelado!==false).reduce((s,o)=>s+o.monto,0);
+  const totalPendiente = orders.filter(o=>o.cancelado===false).reduce((s,o)=>s+o.monto,0);
+  const gastoPollos = pollos * cfg.costoPollo;
+  const totalGastos = gastoPollos + Number(cfg.gastos||0);
+  const balance = totalCobrado - totalGastos;
+
+  const cobradoYape = orders.filter(o=>(o.cancelado!==false) && (o.metodoPago||'Yape')==='Yape').reduce((s,o)=>s+o.monto,0);
+  const cobradoPlin = orders.filter(o=>(o.cancelado!==false) && o.metodoPago==='Plin').reduce((s,o)=>s+o.monto,0);
+  const cobradoEfectivo = orders.filter(o=>(o.cancelado!==false) && o.metodoPago==='Efectivo').reduce((s,o)=>s+o.monto,0);
+  const cobradoOtros = orders.filter(o=>(o.cancelado!==false) && !['Yape','Plin','Efectivo'].includes(o.metodoPago||'Yape')).reduce((s,o)=>s+o.monto,0);
+
+  document.getElementById('summary').innerHTML = `
+    <div class="card"><div class="num">${totalPedidos}</div><div class="label">Pedidos (${DAY_NAMES[currentDay]||''})</div></div>
+    <div class="card"><div class="num">${totalPecho}</div><div class="label">Pechos</div></div>
+    <div class="card"><div class="num">${totalPierna}</div><div class="label">Piernas</div></div>
+    <div class="card"><div class="num">${totalPiezas}</div><div class="label">Piezas totales</div></div>
+    <div class="card"><div class="num">${pollos}</div><div class="label">Pollos a comprar</div></div>
+    <div class="card"><div class="num">${fuentes}</div><div class="label">Fuentes a comprar</div></div>
+  `;
+
+  document.getElementById('caja').innerHTML = `
+    <div class="card"><div class="num">S/ ${totalIngresos.toFixed(2)}</div><div class="label">Ingresos esperados</div></div>
+    <div class="card"><div class="num" style="color:var(--green)">S/ ${totalCobrado.toFixed(2)}</div><div class="label">Ingresos cobrados</div></div>
+    <div class="card"><div class="num" style="color:var(--red)">S/ ${totalPendiente.toFixed(2)}</div><div class="label">Pendiente por cobrar</div></div>
+    <div class="card"><div class="num">S/ ${gastoPollos.toFixed(2)}</div><div class="label">Gasto en pollos</div></div>
+    <div class="card"><div class="num">S/ ${totalGastos.toFixed(2)}</div><div class="label">Gastos totales</div></div>
+    <div class="card"><div class="balance ${balance>=0?'pos':'neg'}">S/ ${balance.toFixed(2)}</div><div class="label">Balance (Cobrado - Gastos)</div></div>
+    <div class="card" style="grid-column:1/-1">
+      <div class="label" style="margin-bottom:6px;font-weight:600">Cobrado por Método de Pago (${DAY_NAMES[currentDay]||''}):</div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:.88rem">
+        <span>📱 <strong>Yape:</strong> S/ ${cobradoYape.toFixed(2)}</span>
+        <span>💜 <strong>Plin:</strong> S/ ${cobradoPlin.toFixed(2)}</span>
+        <span>💵 <strong>Efectivo:</strong> S/ ${cobradoEfectivo.toFixed(2)}</span>
+        ${cobradoOtros > 0 ? `<span>🏦 <strong>Otros:</strong> S/ ${cobradoOtros.toFixed(2)}</span>` : ''}
+      </div>
+    </div>
+  `;
+
+  const body = document.getElementById('ordersBody');
+  const searchTerm = (document.getElementById('searchNombre').value||'').trim().toLowerCase();
+  const visibleOrders = searchTerm ? orders.filter(o=>o.nombre.toLowerCase().includes(searchTerm)) : orders;
+  if(visibleOrders.length===0){
+    body.innerHTML = `<tr><td colspan="9" class="empty">Aún no hay pedidos registrados para ${DAY_NAMES[currentDay]||'este día'}.</td></tr>`;
+  } else {
+    body.innerHTML = visibleOrders.map(o=>{
+      const isPaid = o.cancelado !== false;
+      const metodo = o.metodoPago || 'Yape';
+      return `
+      <tr>
+        <td>${esc(o.nombre)}</td>
+        <td>${esc(o.distrito)}</td>
+        <td>${o.pecho}</td>
+        <td>${o.pierna}</td>
+        <td>${o.pecho+o.pierna}</td>
+        <td>S/ ${o.monto.toFixed(2)}</td>
+        <td>
+          <button type="button" class="pill ${isPaid ? 'pill-paid' : 'pill-pending'}" onclick="toggleCancelado('${o.id}')" title="Haz clic para cambiar estado">
+            ${isPaid ? '✓ Cancelado' : '⏳ Pendiente'}
+          </button>
+        </td>
+        <td>
+          <select class="inline-select" onchange="changeMetodo('${o.id}', this.value)">
+            <option value="Yape" ${metodo==='Yape'?'selected':''}>Yape</option>
+            <option value="Plin" ${metodo==='Plin'?'selected':''}>Plin</option>
+            <option value="Efectivo" ${metodo==='Efectivo'?'selected':''}>Efectivo</option>
+            <option value="Transferencia" ${metodo==='Transferencia'?'selected':''}>Transferencia</option>
+            <option value="Otro" ${metodo==='Otro'?'selected':''}>Otro</option>
+          </select>
+        </td>
+        <td>
+          <button class="ghost small" onclick="editOrder('${o.id}')">Editar</button>
+          <button class="ghost small" onclick="deleteOrder('${o.id}')">Eliminar</button>
+        </td>
+      </tr>`;
+    }).join('');
+  }
+
+  const byDistrict = {};
+  orders.forEach(o=>{
+    (byDistrict[o.distrito] = byDistrict[o.distrito] || []).push(o);
+  });
+  const distEntries = Object.entries(byDistrict);
+  const distDiv = document.getElementById('districts');
+  if(distEntries.length===0){
+    distDiv.innerHTML = `<div class="empty">Sin pedidos aún para ${DAY_NAMES[currentDay]||'este día'}.</div>`;
+  } else {
+    distDiv.innerHTML = distEntries.map(([dist, list])=>{
+      const pechoD = list.reduce((s,o)=>s+o.pecho,0);
+      const piernaD = list.reduce((s,o)=>s+o.pierna,0);
+      return `<div class="dist-card">
+        <h3>${esc(dist)} <span class="pill">${list.length} pedido(s) · ${pechoD} pecho / ${piernaD} pierna</span></h3>
+        <ul>${list.map(o=>{
+          const isPaid = o.cancelado !== false;
+          const metodo = o.metodoPago || 'Yape';
+          return `<li>${esc(o.nombre)} — ${o.pecho} pecho, ${o.pierna} pierna — S/ ${o.monto.toFixed(2)} <span class="pill ${isPaid?'pill-paid':'pill-pending'}">${isPaid?'Cancelado':'Pendiente'} (${esc(metodo)})</span></li>`;
+        }).join('')}</ul>
+      </div>`;
+    }).join('');
+  }
+}
+
+function esc(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+function resetForm(){
+  document.getElementById('orderForm').reset();
+  document.getElementById('fPecho').value = 0;
+  document.getElementById('fPierna').value = 0;
+  if(document.getElementById('fCancelado')) document.getElementById('fCancelado').value = 'true';
+  if(document.getElementById('fMetodo')) document.getElementById('fMetodo').value = 'Yape';
+  editingId = null;
+  document.getElementById('submitBtn').textContent = 'Agregar pedido';
+  document.getElementById('cancelEdit').style.display = 'none';
+}
+
+window.toggleCancelado = function(id){
+  const o = orders.find(x=>x.id===id);
+  if(o){
+    o.cancelado = o.cancelado === false ? true : false;
+    save(); render();
+  }
+};
+
+window.changeMetodo = function(id, val){
+  const o = orders.find(x=>x.id===id);
+  if(o){
+    o.metodoPago = val;
+    save(); render();
+  }
+};
+
+window.editOrder = function(id){
+  const o = orders.find(x=>x.id===id);
+  if(!o) return;
+  document.getElementById('fNombre').value = o.nombre;
+  document.getElementById('fDistrito').value = o.distrito;
+  document.getElementById('fPecho').value = o.pecho;
+  document.getElementById('fPierna').value = o.pierna;
+  document.getElementById('fMonto').value = o.monto;
+  if(document.getElementById('fCancelado')) document.getElementById('fCancelado').value = o.cancelado !== false ? 'true' : 'false';
+  if(document.getElementById('fMetodo')) document.getElementById('fMetodo').value = o.metodoPago || 'Yape';
+  editingId = id;
+  document.getElementById('submitBtn').textContent = 'Guardar cambios';
+  document.getElementById('cancelEdit').style.display = 'inline-block';
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+
+window.deleteOrder = function(id){
+  orders = orders.filter(o=>o.id!==id);
+  save(); render();
+}
+
+document.getElementById('cancelEdit').addEventListener('click', resetForm);
+
+document.getElementById('orderForm').addEventListener('submit', function(e){
+  e.preventDefault();
+  const nombre = document.getElementById('fNombre').value.trim();
+  const distrito = document.getElementById('fDistrito').value.trim();
+  const pecho = Number(document.getElementById('fPecho').value)||0;
+  const pierna = Number(document.getElementById('fPierna').value)||0;
+  let montoInput = document.getElementById('fMonto').value;
+  const monto = montoInput === '' ? (pecho+pierna)*cfg.precio : Number(montoInput);
+  const cancelado = document.getElementById('fCancelado') ? document.getElementById('fCancelado').value === 'true' : true;
+  const metodoPago = document.getElementById('fMetodo') ? document.getElementById('fMetodo').value : 'Yape';
+
+  if(editingId){
+    const idx = orders.findIndex(o=>o.id===editingId);
+    if(idx>-1) orders[idx] = {...orders[idx], nombre, distrito, pecho, pierna, monto, cancelado, metodoPago};
+  } else {
+    orders.push({ id: 'o'+Date.now()+Math.random().toString(36).slice(2,6), nombre, distrito, pecho, pierna, monto, cancelado, metodoPago });
+  }
+  save(); render(); resetForm();
+});
+
+['cfgPrecio','cfgPiezas','cfgFuente','cfgCostoPollo','cfgGastos'].forEach(id=>{
+  document.getElementById(id).addEventListener('input', e=>{
+    const map = {cfgPrecio:'precio', cfgPiezas:'piezas', cfgFuente:'fuente', cfgCostoPollo:'costoPollo', cfgGastos:'gastos'};
+    cfg[map[id]] = Number(e.target.value)||0;
+    save(); render();
+  });
+});
+
+const COL_ALIASES = {
+  nombre: ['nombre','cliente','pedido por'],
+  distrito: ['distrito','zona','ubicacion','ubicación'],
+  pecho: ['pecho'],
+  pierna: ['pierna'],
+  monto: ['monto','importe','pago total','precio'],
+  fecha: ['fecha','día','dia'],
+  cancelado: ['cancelado','pagado','estado','canceló','cancelo','pago','cancelado?','pagado?'],
+  metodo: ['metodo','método','medio','forma','medio de pago','forma de pago','metodo de pago']
+};
+function findKey(row, aliases){
+  const keys = Object.keys(row);
+  for(const alias of aliases){
+    for(const k of keys){ if(k.trim().toLowerCase().includes(alias)) return k; }
+  }
+  return null;
+}
+function importWorkbook(arrayBuffer){
+  const wb = XLSX.read(arrayBuffer, {type:'array'});
+  const sheetName = wb.SheetNames.find(n=>/pedido/i.test(n)) || wb.SheetNames[0];
+  const sheet = wb.Sheets[sheetName];
+  let rows = XLSX.utils.sheet_to_json(sheet, {defval:'', range: XLSX.utils.decode_range(sheet['!ref']).s.r});
+  let headerRowIdx = 0;
+  const raw = XLSX.utils.sheet_to_json(sheet, {header:1, defval:''});
+  for(let i=0;i<Math.min(raw.length,10);i++){
+    const line = raw[i].join('|').toLowerCase();
+    if(line.includes('nombre')){ headerRowIdx = i; break; }
+  }
+  rows = XLSX.utils.sheet_to_json(sheet, {defval:'', range: headerRowIdx});
+
+  if(rows.length===0) return {added:0, skipped:0};
+
+  const sample = rows[0];
+  const kNombre = findKey(sample, COL_ALIASES.nombre);
+  const kDistrito = findKey(sample, COL_ALIASES.distrito);
+  const kPecho = findKey(sample, COL_ALIASES.pecho);
+  const kPierna = findKey(sample, COL_ALIASES.pierna);
+  const kMonto = findKey(sample, COL_ALIASES.monto);
+  const kFecha = findKey(sample, COL_ALIASES.fecha);
+  const kCancelado = findKey(sample, COL_ALIASES.cancelado);
+  const kMetodo = findKey(sample, COL_ALIASES.metodo);
+
+  if(!kNombre){ return {error:'No se encontró una columna de nombre. Revisa los encabezados de tu Excel.'}; }
+
+  let usableRows = rows.filter(r=>String(r[kNombre]||'').trim());
+
+  if(kFecha){
+    const dates = [...new Set(usableRows.map(r=>String(r[kFecha]||'').trim()).filter(Boolean))];
+    if(dates.length>1){
+      const dayKeyword = currentDay === 'v25' ? '25' : '27';
+      const dayText = currentDay === 'v25' ? 'viernes' : 'domingo';
+      const guess = dates.find(d=>d.toLowerCase().includes(dayText) || d.includes(dayKeyword)) || dates[0];
+      const answer = prompt('El Excel tiene pedidos de varias fechas: ' + dates.join(', ') + '.\n¿Cuál deseas importar a ' + (DAY_NAMES[currentDay]||'este panel') + '?', guess);
+      if(answer===null) return {aborted:true};
+      const chosen = answer.trim().toLowerCase();
+      usableRows = usableRows.filter(r=>String(r[kFecha]||'').trim().toLowerCase()===chosen);
+    }
+  }
+
+  let added=0, skipped = rows.length - usableRows.length;
+  usableRows.forEach(row=>{
+    const nombre = String(row[kNombre]).trim();
+    const distrito = kDistrito ? String(row[kDistrito]||'').trim() : '';
+    const pecho = kPecho ? (Number(row[kPecho])||0) : 0;
+    const pierna = kPierna ? (Number(row[kPierna])||0) : 0;
+    const montoRaw = kMonto ? Number(row[kMonto]) : NaN;
+    const monto = isNaN(montoRaw) ? (pecho+pierna)*cfg.precio : montoRaw;
+    
+    let cancelado = true;
+    if(kCancelado){
+      const val = String(row[kCancelado]||'').trim().toLowerCase();
+      if(val === 'no' || val === 'false' || val.includes('pend') || val.includes('debe')) cancelado = false;
+    }
+
+    let metodoPago = 'Yape';
+    if(kMetodo){
+      const mVal = String(row[kMetodo]||'').trim();
+      if(/yape/i.test(mVal)) metodoPago = 'Yape';
+      else if(/plin/i.test(mVal)) metodoPago = 'Plin';
+      else if(/efectivo|cash/i.test(mVal)) metodoPago = 'Efectivo';
+      else if(/transf|banco|bcp|bbva/i.test(mVal)) metodoPago = 'Transferencia';
+      else if(mVal) metodoPago = mVal;
+    }
+
+    orders.push({ id:'o'+Date.now()+Math.random().toString(36).slice(2,7), nombre, distrito, pecho, pierna, monto, cancelado, metodoPago });
+    added++;
+  });
+  return {added, skipped};
+}
+
+document.getElementById('importBtn').addEventListener('click', ()=>document.getElementById('importFile').click());
+document.getElementById('importFile').addEventListener('change', function(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  if(orders.length>0 && !confirm('Ya tienes pedidos registrados para ' + DAY_NAMES[currentDay] + '. Los pedidos del Excel se agregarán a la lista actual (no se borrará nada). ¿Continuar?')) {
+    e.target.value=''; return;
+  }
+  const reader = new FileReader();
+  reader.onload = function(ev){
+    try{
+      const result = importWorkbook(new Uint8Array(ev.target.result));
+      const msg = document.getElementById('importMsg');
+      if(result.aborted){ msg.textContent = 'Importación cancelada.'; }
+      else if(result.error){ msg.textContent = result.error; }
+      else{
+        msg.textContent = `Se importaron ${result.added} pedido(s) a ${DAY_NAMES[currentDay]}` + (result.skipped? `, ${result.skipped} fila(s) sin nombre fueron omitidas.`:'.');
+        save(); render();
+      }
+    }catch(err){
+      document.getElementById('importMsg').textContent = 'No se pudo leer el archivo. Verifica que sea un .xlsx o .xls válido.';
+      console.error(err);
+    }
+    e.target.value='';
+  };
+  reader.readAsArrayBuffer(file);
+});
+
+document.getElementById('searchNombre').addEventListener('input', render);
+
+load();
+</script>
+</body>
+</html>
